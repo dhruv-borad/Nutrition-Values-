@@ -1,0 +1,143 @@
+---
+title: "Appendix for Approach 4"
+author: "Dhruv Borad (2049882)"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Install Library
+```{r}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(MASS)
+library(psych)
+library(lm.beta)
+```
+
+# Pre-processing 
+```{r}
+nutrition <- read_csv("nutrition.csv", col_types = cols(.default = "n"))
+nut = nutrition[,-c(1,2,3)]
+head(nut)
+nut1 <- nut%>%drop_na()
+n1<-nutrition[,-c(1,2,3,4)]
+n1<- subset(n1, select = -lucopene)
+n2<-n1%>%drop_na()
+n3<- subset(n2,select = -c(total_fat, saturated_fat, fat)) 
+n4<- subset(n3,
+            select = -c(saturated_fatty_acids,monounsaturated_fatty_acids,
+                   polyunsaturated_fatty_acids,fatty_acids_total_trans,
+                   cholesterol))   #omitting other highly correlated fats
+
+n5 <- subset(n4,
+            select = -c(caffeine,
+                        alcohol,lactose)) 
+cal <- as.matrix(nut1$calories)
+```
+
+```{r}
+library(Hmisc)
+summary(cal)
+
+n5$cal_bins <- as.numeric(cut(nut1$calories, 4))
+n5 <- n5 %>%dplyr::select("cal_bins",everything())
+
+x = n5
+x$calories = nut1$calories
+
+gr <- x %>% group_by(cal_bins)
+gr
+gr %>% summarise(min_cal = min(calories),max_cal=max(calories))
+```
+
+# Visualization
+
+```{r}
+plot(n5[2:10],pch=19,col=n5$cal_bins) # fig 4.1
+```
+
+# LDA before splitting data
+
+```{r}
+cal.lda = lda(cal_bins~.,data=n5)
+print(cal.lda)
+```
+
+# Contributions from variables
+
+```{r}
+print(cal.lda$scaling[order(cal.lda$scaling[,1]),]) # fig 4.2
+
+print(cal.lda$scaling[order(cal.lda$scaling[,2]),]) # fig 4.3
+       
+print(cal.lda$scaling[order(cal.lda$scaling[,3]),]) # fig 4.4
+```
+
+# LDA visualization
+
+```{r}
+cal.lda.values = predict(cal.lda)
+```
+
+```{r}
+ldahist(data = cal.lda.values$x[,1],g=x$cal_bins) # fig 4.5 
+
+ldahist(data = cal.lda.values$x[,2],g=x$cal_bins) # fig 4.6
+
+ldahist(data = cal.lda.values$x[,3],g=x$cal_bins) # fig 4.7
+
+plot(cal.lda.values$x[,1],cal.lda.values$x[,2],col=x$cal_bins,pch=19) # fig 4.8
+
+plot(cal.lda.values$x[,1],cal.lda.values$x[,3],col=x$cal_bins,pch=19) # fig 4.9
+
+plot(cal.lda.values$x[,2],cal.lda.values$x[,3],col=x$cal_bins,pch=19) # fig 4.10
+
+table(x$cal_bins,cal.lda.values$class)
+```
+
+# After splitting data Train/Test
+
+```{r}
+s = sample(nrow(x),nrow(x)*.8)
+caltrain = x[s,]
+caltest = x[-s,]
+```
+
+```{r}
+cal.lda = lda(cal_bins~.,data=caltrain)
+cal.lda
+
+# similar results to before 
+# similar sets of contribution 
+print(cal.lda$scaling[order(cal.lda$scaling[,1]),]) # fig 4.11
+print(cal.lda$scaling[order(cal.lda$scaling[,2]),]) # fig 4.12
+print(cal.lda$scaling[order(cal.lda$scaling[,3]),]) # fig 4.13
+```
+
+# Visualizing the predictions 
+
+```{r}
+cal.lda.values = predict(cal.lda,caltest)
+```
+
+```{r}
+ldahist(data = cal.lda.values$x[,1],g=caltest$cal_bins) # fig 4.14
+ldahist(data = cal.lda.values$x[,2],g=caltest$cal_bins) # fig 4.15
+ldahist(data = cal.lda.values$x[,3],g=caltest$cal_bins) # fig 4.16
+ 
+plot(cal.lda.values$x[,1],cal.lda.values$x[,2],col=caltest$cal_bins,pch=19) # fig 4.17
+plot(cal.lda.values$x[,1],cal.lda.values$x[,3],col=caltest$cal_bins,pch=19) # fig 4.18
+plot(cal.lda.values$x[,2],cal.lda.values$x[,3],col=caltest$cal_bins,pch=19) # fig 4.19
+```
+
+# Confusion matrix
+
+```{r}
+table(caltest$cal_bins,cal.lda.values$class) 
+```
